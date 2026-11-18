@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const express = require('express');
 const { ROOT, readVersions, listBranches } = require('./sync');
@@ -100,7 +101,15 @@ app.get('/api/events', (req, res) => {
 });
 
 const port = Number(process.env.PORT || 4567);
-app.listen(port, '127.0.0.1', () => console.log(`Unity build dashboard: http://localhost:${port}`))
+// 127.0.0.1 by default; HOST=0.0.0.0 opens the dashboard to the LAN (it has no login).
+const host = process.env.HOST || '127.0.0.1';
+app.listen(port, host, () => {
+  console.log(`Unity build dashboard: http://localhost:${port}`);
+  if (host !== '127.0.0.1') {
+    const lan = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal);
+    lan.forEach((i) => console.log(`  LAN: http://${i.address}:${port}`));
+  }
+})
   .on('error', (e) => {
     if (e.code !== 'EADDRINUSE') throw e;
     console.error(`Port ${port} is already in use - probably another unity-build server is running.`);

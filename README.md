@@ -28,7 +28,7 @@ npm start                   # http://localhost:4567
 ```
 
 Chạy nền: `nohup npm start > server.log 2>&1 &`. Dừng: `kill $(lsof -ti tcp:4567)`.
-Server chỉ nghe trên `127.0.0.1`.
+Mặc định server chỉ nghe trên `127.0.0.1`. Để máy khác cùng mạng truy cập, đặt `HOST=0.0.0.0` trong `.env` rồi mở `http://<IP máy build>:4567`. Dashboard không có đăng nhập: ai trong mạng cũng build và tải APK được.
 
 ## Dashboard
 - **Build mới**:
