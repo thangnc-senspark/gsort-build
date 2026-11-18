@@ -1,0 +1,14 @@
+{
+  "name": "unity-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated Unity builds in Docker with a live progress dashboard",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

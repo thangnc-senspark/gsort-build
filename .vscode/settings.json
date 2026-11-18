@@ -1,0 +1,3 @@
+{
+    "dotnet.defaultSolution": "workspace/goodsort/src/src.sln"
+}

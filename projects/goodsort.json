@@ -1,0 +1,54 @@
+{
+  "id": "goodsort",
+  "name": "GoodSort",
+  "unityVersion": "6000.3.12f1",
+  "unityPath": "/Applications/Unity/Hub/Editor/{version}/Unity.app/Contents/MacOS/Unity",
+  "source": {
+    "url": "https://github.com/Senspark/GoodSort",
+    "defaultBranch": "Viet/shuffle-booster",
+    "submodules": true,
+    "extraFiles": {
+      "keystore.keystore": "secrets/goodsort.keystore"
+    }
+  },
+  "scenes": [
+    "Assets/Scenes/TutorialGameScene.unity",
+    "Assets/Scenes/Splash.unity",
+    "Assets/Scenes/MainMenu.unity",
+    "Assets/Scenes/GameScene.unity"
+  ],
+  "android": {
+    "keystore": "keystore.keystore",
+    "outputName": "Relax_Sort_Puzzle"
+  },
+  "ios": {
+    "podfileStripPatterns": [
+      "Yandex"
+    ]
+  },
+  "defaultEnvironment": "test",
+  "environments": {
+    "test": {
+      "label": "Test",
+      "url": "https://gsort-test.senspark.com/gsort",
+      "patches": [
+        {
+          "file": "Assets/Scripts/Constant/Globals.cs",
+          "find": "IsServerProduct\\s*=\\s*(true|false)\\s*;",
+          "replace": "IsServerProduct = false;"
+        }
+      ]
+    },
+    "prod": {
+      "label": "Prod",
+      "url": "https://gsort-prod.senspark.com/gsort",
+      "patches": [
+        {
+          "file": "Assets/Scripts/Constant/Globals.cs",
+          "find": "IsServerProduct\\s*=\\s*(true|false)\\s*;",
+          "replace": "IsServerProduct = true;"
+        }
+      ]
+    }
+  }
+}

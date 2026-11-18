@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unity Build</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #6a737d; --border: #e3e6ea;
+    --accent: #2f6fed; --ok: #1f9d55; --err: #d73a49; --warn: #c58a00; --track: #e9ecf1;
+    --log-bg: #0f1419; --log-text: #cfd6dd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #8b949e; --border: #2a313a;
+      --accent: #4c8dff; --ok: #3fb950; --err: #f85149; --warn: #d29922; --track: #21262d;
+      --log-bg: #0a0d12; --log-text: #c9d1d9;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+  .pill.ok { color: var(--ok); border-color: currentColor; } .pill.bad { color: var(--err); border-color: currentColor; }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px 20px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-width: 0; }
+  .panel + .panel { margin-top: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  select, input { width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .check { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--text); font-size: 13px; }
+  .check input { width: auto; }
+  button { font: inherit; border-radius: 6px; padding: 8px 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 14px; font-weight: 600; }
+  button.ghost { width: 100%; margin-top: 8px; }
+  button.danger { color: var(--err); border-color: var(--err); }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { font-size: 12px; margin-top: 8px; color: var(--err); white-space: pre-wrap; }
+  .jobs { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+  .jobs li { padding: 8px; border-radius: 6px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+  .jobs li:hover, .jobs li.sel { background: var(--track); }
+  .jobs .t { font-weight: 600; } .jobs .s { font-size: 12px; color: var(--muted); }
+  .badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; align-self: center; }
+  .b-running { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  .b-queued { background: var(--track); color: var(--muted); }
+  .b-succeeded { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .b-failed, .b-interrupted { background: color-mix(in srgb, var(--err) 18%, transparent); color: var(--err); }
+  .env-prod { background: color-mix(in srgb, var(--err) 18%, transparent); color: var(--err); }
+  .env-test { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .branch-row { display: flex; gap: 6px; }
+  .branch-row select { flex: 1; min-width: 0; }
+  .branch-row button { flex: none; padding: 7px 10px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .warn { font-size: 12px; color: var(--err); margin-top: 6px; }
+  .b-cancelled { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .head .title { font-size: 18px; font-weight: 650; }
+  .head .sub { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .big { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; background: var(--track); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .6s ease; }
+  .bar.ok > div { background: var(--ok); } .bar.fail > div { background: var(--err); }
+  .meta { display: flex; gap: 18px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+  .detail { margin-top: 6px; font-size: 13px; min-height: 1.4em; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stages { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+  .stages li { display: flex; gap: 8px; align-items: center; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; }
+  .stages .d { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--track); border: 1px solid var(--border); }
+  .st-done .dot { background: var(--ok); border-color: var(--ok); }
+  .st-failed .dot { background: var(--err); border-color: var(--err); }
+  .st-running .dot { background: var(--accent); border-color: var(--accent); animation: pulse 1.2s infinite; }
+  .st-running { border-color: var(--accent) !important; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .artifacts a { display: inline-block; margin: 10px 8px 0 0; padding: 7px 11px; border-radius: 6px; background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); text-decoration: none; font-weight: 600; font-size: 13px; }
+  .errors { margin-top: 12px; border: 1px solid var(--err); border-radius: 7px; padding: 8px 10px; font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--err); max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .logbar { display: flex; gap: 8px; align-items: center; margin: 16px 0 6px; flex-wrap: wrap; }
+  .logbar input[type=search] { flex: 1; min-width: 140px; }
+  .logbar .check { margin: 0; }
+  pre.log { background: var(--log-bg); color: var(--log-text); margin: 0; padding: 10px 12px; border-radius: 8px; height: 46vh; overflow: auto; font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
+  pre.log .e { color: #ff7b72; } pre.log .m { color: #79c0ff; } pre.log .w { color: #e3b341; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Unity Build</h1>
+  <span id="stRunner" class="pill"></span>
+  <span id="stSource" class="pill"></span>
+  <span id="stAndroid" class="pill"></span>
+  <span id="stIos" class="pill"></span>
+</header>
+<main>
+  <section>
+    <div class="panel">
+      <h2>Build mới</h2>
+      <label>Project</label>
+      <select id="project"></select>
+      <label>Branch</label>
+      <div class="branch-row">
+        <select id="branch"><option value="">Đang tải…</option></select>
+        <button type="button" id="fetchBranches" title="Lấy lại toàn bộ branch từ remote">↻ Fetch</button>
+      </div>
+      <div class="hint" id="branchHint"></div>
+      <div id="envRow">
+        <label>Server</label>
+        <select id="environment"></select>
+        <div class="warn" id="envWarn" style="display:none">Build PROD: game sẽ kết nối server thật.</div>
+      </div>
+      <label>Platform</label>
+      <select id="platform">
+        <option value="android">Android</option>
+        <option value="ios">iOS (Xcode project)</option>
+        <option value="both">Android + iOS</option>
+      </select>
+      <div id="androidOpts">
+        <label>Android format</label>
+        <select id="format"><option value="apk">APK</option><option value="aab">AAB</option><option value="both">APK + AAB</option></select>
+      </div>
+      <div class="row">
+        <div><label>Version name</label><input id="versionName"></div>
+        <div><label id="codeLabel">Version code</label><input id="versionCode" inputmode="numeric"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="clean"> Xoá Library cache (import lại từ đầu)</label>
+      <button class="primary" id="start">Bắt đầu build</button>
+      <button class="ghost" id="testLicense">Test license</button>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div class="panel">
+      <h2>Lịch sử</h2>
+      <ul class="jobs" id="jobs"></ul>
+    </div>
+  </section>
+  <section class="panel" id="view"><div class="empty">Chọn một job hoặc bắt đầu build mới.</div></section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let projects = [], jobs = [], selected = null, es = null, logLines = [];
+
+const fmtDur = (s) => {
+  if (s == null || isNaN(s)) return '–';
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${String(ss).padStart(2, '0')}s` : `${ss}s`;
+};
+const fmtSize = (b) => b > 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const platformName = (p) => ({ android: 'Android', ios: 'iOS', license: 'License test' }[p] || p);
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+async function init() {
+  projects = await api('/api/projects');
+  $('project').innerHTML = projects.map((p) => `<option value="${p.id}">${esc(p.name)} · ${esc(p.unityVersion)}</option>`).join('');
+  fillVersions();
+  jobs = await api('/api/jobs');
+  renderJobs();
+  const active = jobs.find((j) => j.status === 'running') || jobs[0];
+  if (active) select(active.id); else connect(null);
+}
+
+function fillVersions() {
+  const p = projects.find((x) => x.id === $('project').value);
+  const v = (p && p.versions) || {};
+  const ios = $('platform').value === 'ios';
+  if (p) {
+    $('stRunner').textContent = `Unity ${p.unityVersion}`;
+    $('stSource').textContent = p.repo.replace(/^https?:\/\//, '');
+    $('envRow').style.display = p.environments.length ? '' : 'none';
+    if ($('environment').dataset.project !== p.id) {
+      $('environment').dataset.project = p.id;
+      $('environment').innerHTML = p.environments.map((e) => `<option value="${e.id}"${e.id === p.defaultEnvironment ? ' selected' : ''}>${esc(e.label)} · ${esc(e.url || '')}</option>`).join('');
+    }
+    $('envWarn').style.display = $('environment').value === 'prod' ? '' : 'none';
+    if ($('branch').dataset.project !== p.id) {
+      $('branch').dataset.project = p.id;
+      loadBranches(false);
+    }
+    for (const [el, key, name] of [['stAndroid', 'android', 'Android'], ['stIos', 'ios', 'iOS']]) {
+      const probs = p.problems[key];
+      $(el).className = 'pill ' + (probs.length ? 'bad' : 'ok');
+      $(el).textContent = probs.length ? `${name}: ${probs.join('; ')}` : `${name} ✓`;
+    }
+  }
+  $('androidOpts').style.display = ios ? 'none' : '';
+  $('codeLabel').textContent = ios ? 'Build number' : 'Version code';
+  $('versionName').placeholder = v.versionName || '';
+  $('versionCode').placeholder = (ios ? v.iosBuildNumber : v.androidVersionCode) || '';
+}
+async function loadBranches(refresh) {
+  const p = projects.find((x) => x.id === $('project').value);
+  if (!p) return;
+  const sel = $('branch'), btn = $('fetchBranches');
+  const current = sel.value || p.defaultBranch || '';
+  btn.disabled = true;
+  btn.textContent = '↻ Đang fetch…';
+  try {
+    const { branches, fetchedAt } = await api(`/api/projects/${p.id}/branches${refresh ? '?refresh=1' : ''}`);
+    const names = branches.map((b) => b.name);
+    const opts = branches.map((b) => `<option value="${esc(b.name)}">${esc(b.name)} · ${esc(b.sha)}${b.name === p.defaultBranch ? ' (mặc định)' : ''}</option>`);
+    if (current && !names.includes(current)) opts.unshift(`<option value="${esc(current)}">${esc(current)} (không còn trên remote)</option>`);
+    sel.innerHTML = opts.join('');
+    sel.value = current;
+    $('branchHint').textContent = `${branches.length} branch · fetch lúc ${new Date(fetchedAt).toLocaleTimeString()}`;
+  } catch (e) {
+    $('branchHint').textContent = 'Không lấy được branch: ' + e.message;
+    if (!sel.options.length || !sel.value) sel.innerHTML = `<option value="${esc(current)}">${esc(current)}</option>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Fetch';
+  }
+}
+$('fetchBranches').onclick = () => loadBranches(true);
+$('platform').onchange = fillVersions;
+$('environment').onchange = fillVersions;
+$('project').onchange = fillVersions;
+
+async function submit(body) {
+  $('msg').textContent = '';
+  try {
+    const created = await api('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    created.forEach(upsert);
+    select(created[0].id);
+  } catch (e) { $('msg').textContent = e.message; }
+}
+$('start').onclick = () => submit({
+  projectId: $('project').value, platform: $('platform').value, androidFormat: $('format').value,
+  versionName: $('versionName').value.trim() || undefined, versionCode: $('versionCode').value.trim() || undefined,
+  cleanLibrary: $('clean').checked,
+  branch: $('branch').value || undefined,
+  environment: $('environment').value || undefined,
+});
+$('testLicense').onclick = () => submit({ projectId: $('project').value, platform: 'license' });
+
+function upsert(job) {
+  const i = jobs.findIndex((j) => j.id === job.id);
+  if (i >= 0) jobs[i] = job; else jobs.unshift(job);
+  jobs.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function renderJobs() {
+  $('jobs').innerHTML = jobs.map((j) => {
+    const dur = j.startedAt ? fmtDur(((j.endedAt || Date.now()) - j.startedAt) / 1000) : '';
+    const pct = j.status === 'running' && j.progress ? ` · ${j.progress.percent}%` : '';
+    return `<li class="${j.id === selected ? 'sel' : ''}" data-id="${j.id}">
+      <span class="t">${platformName(j.platform)}${j.androidFormat ? ' · ' + j.androidFormat.toUpperCase() : ''}${j.environment ? ` <span class="badge env-${esc(j.environment)}">${esc(j.environment.toUpperCase())}</span>` : ''}</span>
+      <span class="badge b-${j.status}">${j.status}</span>
+      <span class="s">${new Date(j.createdAt).toLocaleString()}${dur ? ' · ' + dur : ''}${pct}${j.branch ? '<br>' + esc(j.branch) + (j.commit ? ' @ ' + j.commit.short : '') : ''}</span></li>`;
+  }).join('') || '<li class="s">Chưa có job nào</li>';
+  $('jobs').querySelectorAll('li[data-id]').forEach((li) => li.onclick = () => select(li.dataset.id));
+}
+
+function select(id) {
+  selected = id;
+  logLines = [];
+  renderJobs();
+  renderView(true);
+  connect(id);
+}
+
+function connect(id) {
+  if (es) es.close();
+  es = new EventSource('/api/events' + (id ? '?job=' + encodeURIComponent(id) : ''));
+  es.addEventListener('update', (e) => {
+    const job = JSON.parse(e.data);
+    upsert(job);
+    renderJobs();
+    if (job.id === selected) renderView(false);
+  });
+  es.addEventListener('tail', (e) => { const d = JSON.parse(e.data); if (d.id === selected) { logLines = d.lines; renderLog(true); } });
+  es.addEventListener('log', (e) => { const d = JSON.parse(e.data); if (d.id === selected) { logLines.push(d.line); if (logLines.length > 5000) logLines.splice(0, 1000); renderLog(false); } });
+}
+
+function renderView(full) {
+  const j = jobs.find((x) => x.id === selected);
+  if (!j) return;
+  const p = j.progress || { percent: 0, stages: [], errors: [], artifacts: [] };
+  const elapsed = j.startedAt ? ((j.endedAt || Date.now()) - j.startedAt) / 1000 : 0;
+  const pct = j.status === 'succeeded' ? 100 : p.percent;
+  const barCls = j.status === 'succeeded' ? 'ok' : ['failed', 'cancelled', 'interrupted'].includes(j.status) ? 'fail' : '';
+  if (full || !$('pct')) {
+    $('view').innerHTML = `
+      <div class="head">
+        <div><div class="title" id="vTitle"></div><div class="sub" id="vSub"></div></div>
+        <div style="text-align:right"><div class="big" id="pct"></div><span class="badge" id="vBadge"></span></div>
+      </div>
+      <div class="bar" id="bar"><div></div></div>
+      <div class="meta"><span id="vElapsed"></span><span id="vEta"></span><span id="vStage"></span></div>
+      <div class="detail" id="vDetail"></div>
+      <ul class="stages" id="vStages"></ul>
+      <div class="artifacts" id="vArtifacts"></div>
+      <div id="vErrors"></div>
+      <div class="logbar">
+        <input type="search" id="logFilter" placeholder="Lọc log…">
+        <label class="check"><input type="checkbox" id="errOnly"> Chỉ lỗi</label>
+        <label class="check"><input type="checkbox" id="follow" checked> Tự cuộn</label>
+        <a href="/api/jobs/${j.id}/log" target="_blank"><button>build.log</button></a>
+        <button class="danger" id="cancel">Huỷ</button>
+      </div>
+      <pre class="log" id="log"></pre>`;
+    $('logFilter').oninput = () => renderLog(true);
+    $('errOnly').onchange = () => renderLog(true);
+    $('cancel').onclick = () => api(`/api/jobs/${j.id}/cancel`, { method: 'POST' });
+    renderLog(true);
+  }
+  $('vTitle').textContent = `${platformName(j.platform)}${j.androidFormat ? ' · ' + j.androidFormat.toUpperCase() : ''}${j.versionName ? ' · v' + j.versionName : ''}${j.versionCode ? ' (' + j.versionCode + ')' : ''}`;
+  const src = j.branch ? ` · ${j.branch}${j.commit ? ` @ ${j.commit.short} “${j.commit.subject}” (${j.commit.author})` : ''}` : '';
+  const env = j.environment ? ` · server ${j.environment.toUpperCase()}` : '';
+  const unityLabel = j.unityVersion ? `Unity ${j.unityVersion}` : j.image || '';
+  $('vSub').textContent = `${j.id} · ${unityLabel}${src}${env}${j.cleanLibrary ? ' · clean Library' : ''}`;
+  $('pct').textContent = pct.toFixed(pct % 1 ? 1 : 0) + '%';
+  $('vBadge').className = 'badge b-' + j.status; $('vBadge').textContent = j.status;
+  $('bar').className = 'bar ' + barCls; $('bar').firstElementChild.style.width = pct + '%';
+  $('vElapsed').textContent = 'Thời gian: ' + fmtDur(elapsed);
+  $('vEta').textContent = j.status === 'running' ? 'Còn lại: ' + (p.etaSeconds != null ? '~' + fmtDur(p.etaSeconds) : 'chưa ước tính được (lần đầu)') : '';
+  const cur = p.stages.find((s) => s.id === p.stage);
+  $('vStage').textContent = j.status === 'running' && cur ? 'Giai đoạn: ' + cur.label : '';
+  $('vDetail').textContent = j.status === 'running' ? (p.detail || '') : '';
+  $('vStages').innerHTML = p.stages.map((s) => {
+    const d = s.startedAt ? ((s.endedAt || Date.now()) - s.startedAt) / 1000 : null;
+    return `<li class="st-${s.status}"><span class="dot"></span>${esc(s.label)}<span class="d">${d != null ? fmtDur(d) : ''}</span></li>`;
+  }).join('');
+  $('vArtifacts').innerHTML = (j.artifacts || []).map((a) => `<a href="${a.url}" download>⬇ ${esc(a.name)} · ${fmtSize(a.size)}</a>`).join('');
+  $('vErrors').innerHTML = p.errors && p.errors.length && j.status !== 'succeeded' ? `<div class="errors">${p.errors.map(esc).join('\n')}</div>` : '';
+  $('cancel').style.display = ['running', 'queued'].includes(j.status) ? '' : 'none';
+}
+
+const ERR = /error CS\d+|Exception|FAILURE|Build Failed|No valid Unity|\[UBS\]|compiler errors|^>>> |result=Failed/;
+function cls(l) {
+  if (ERR.test(l)) return 'e';
+  if (l.startsWith('##UBS') || l.startsWith('$ ') || l.includes('DisplayProgressbar')) return 'm';
+  if (/warning/i.test(l)) return 'w';
+  return '';
+}
+let pending = false;
+function renderLog(full) {
+  const el = $('log'); if (!el) return;
+  if (pending && !full) return;
+  pending = true;
+  requestAnimationFrame(() => {
+    pending = false;
+    const f = $('logFilter').value.toLowerCase(), errOnly = $('errOnly').checked;
+    const lines = logLines.slice(-3000).filter((l) => (!f || l.toLowerCase().includes(f)) && (!errOnly || cls(l) === 'e'));
+    el.innerHTML = lines.map((l) => { const c = cls(l); return c ? `<span class="${c}">${esc(l)}</span>` : esc(l); }).join('\n');
+    if ($('follow').checked) el.scrollTop = el.scrollHeight;
+  });
+}
+
+setInterval(() => { if (jobs.some((j) => j.status === 'running')) renderJobs(); }, 5000);
+init().catch((e) => { $('msg').textContent = e.message; });
+</script>
+</body>
+</html>
