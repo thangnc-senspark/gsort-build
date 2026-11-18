@@ -1,6 +1,6 @@
 // Prepares workspace/<project>/src from git: shallow fetch of the branch, clean checkout, submodules.
-// With source.path instead of source.url, the checkout is one cloned by hand: it is never
-// cloned or re-pointed, only fetched (not shallow) from its own origin.
+// With source.path instead of source.url, the checkout is one cloned by hand and kept up to date
+// by hand: nothing talks to the remote, branches are the ones already in the repo (git branch -a).
 // Library/ is kept between builds; everything else matches the commit exactly.
 const fs = require('fs');
 const path = require('path');
@@ -44,6 +44,10 @@ function isWorkingRepo(dir) {
   return !!m && fs.existsSync(path.resolve(dir, m[1].trim()));
 }
 
+function hasRef(dir, ref) {
+  return spawnSync('git', ['show-ref', '--verify', '-q', ref], { cwd: dir }).status === 0;
+}
+
 // Returns { dir, commit }.
 async function syncProject(project, branch, onLine) {
   const { url, submodules = true, extraFiles = {} } = project.source;
@@ -61,10 +65,16 @@ async function syncProject(project, branch, onLine) {
       await g(['remote', 'set-url', 'origin', url]);
     }
   }
-  // "+" because a shallow repo cannot prove a fast-forward; we always want the remote state.
-  const depth = url ? ['--depth', '1'] : [];
-  await g(['fetch', ...depth, '--no-tags', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
-  await g(['checkout', '-q', '-f', '-B', 'ubs-build', `origin/${branch}`]);
+  let ref = `origin/${branch}`;
+  if (url) {
+    // "+" because a shallow repo cannot prove a fast-forward; we always want the remote state.
+    await g(['fetch', '--depth', '1', '--no-tags', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
+  } else if (!hasRef(dir, `refs/remotes/${ref}`)) {
+    // Local-only branch; fall back to it when there is no remote-tracking copy.
+    if (!hasRef(dir, `refs/heads/${branch}`)) throw new Error(`Branch ${branch} not found in ${project.source.path} (git branch -a)`);
+    ref = branch;
+  }
+  await g(['checkout', '-q', '-f', '-B', 'ubs-build', ref]);
   await g(['clean', '-ffdxq', '-e', '/Library/']);
 
   if (submodules) {
@@ -78,7 +88,7 @@ async function syncProject(project, branch, onLine) {
       }
     }
     await g(['submodule', 'sync', '-q', '--recursive']);
-    await g(['submodule', 'update', '--init', '--recursive', '--depth', '1', '-f']);
+    await g(['submodule', 'update', '--init', '--recursive', '-f', ...(url ? ['--depth', '1'] : ['--no-fetch'])]);
     await g(['submodule', 'foreach', '-q', '--recursive', 'git clean -ffdxq']);
   }
 
@@ -102,20 +112,26 @@ async function syncProject(project, branch, onLine) {
   return { dir, commit: { sha, short, subject, author, date } };
 }
 
-// Remote branches with their head commit, for the dashboard. Cached for a minute unless refresh is set.
+// Branches with their head commit, for the dashboard. Cached for a minute unless refresh is set.
+// For a source.path checkout these are the branches already in the repo, remote-tracking and local.
 const branchCache = new Map();
 async function listBranches(project, { refresh = false } = {}) {
   const hit = branchCache.get(project.id);
   if (!refresh && hit && Date.now() - hit.fetchedAt < 60000) return hit;
   const lines = [];
   const { url } = project.source;
-  const code = await run('git', ['ls-remote', '--heads', url || 'origin'], { cwd: url ? undefined : workspaceDir(project), env: gitEnv(project), onLine: (l) => lines.push(l) });
-  if (code !== 0) throw new Error(`git ls-remote failed: ${lines.slice(-3).join(' ')}`);
-  const branches = lines
-    .map((l) => l.match(/^([0-9a-f]{40})\s+refs\/heads\/(.+)$/))
-    .filter(Boolean)
-    .map(([, sha, name]) => ({ name, sha: sha.slice(0, 8) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const args = url
+    ? ['ls-remote', '--heads', url]
+    : ['for-each-ref', '--format=%(objectname) %(refname)', 'refs/remotes/origin', 'refs/heads'];
+  const code = await run('git', args, { cwd: url ? undefined : workspaceDir(project), env: gitEnv(project), onLine: (l) => lines.push(l) });
+  if (code !== 0) throw new Error(`git ${args[0]} failed: ${lines.slice(-3).join(' ')}`);
+  const byName = new Map();
+  for (const l of lines) {
+    const m = l.match(/^([0-9a-f]{40})\s+refs\/(?:heads|remotes\/origin)\/(.+)$/);
+    // ubs-build is our own build branch; remote-tracking refs come first and win over local ones.
+    if (m && m[2] !== 'HEAD' && m[2] !== 'ubs-build' && !byName.has(m[2])) byName.set(m[2], { name: m[2], sha: m[1].slice(0, 8) });
+  }
+  const branches = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   const result = { fetchedAt: Date.now(), branches };
   branchCache.set(project.id, result);
   return result;
