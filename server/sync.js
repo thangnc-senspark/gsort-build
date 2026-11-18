@@ -1,4 +1,6 @@
 // Prepares workspace/<project>/src from git: shallow fetch of the branch, clean checkout, submodules.
+// With source.path instead of source.url, the checkout is one cloned by hand: it is never
+// cloned or re-pointed, only fetched (not shallow) from its own origin.
 // Library/ is kept between builds; everything else matches the commit exactly.
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +25,7 @@ function gitEnv(project) {
 }
 
 function workspaceDir(project) {
+  if (project.source.path) return path.resolve(ROOT, project.source.path);
   return path.join(ROOT, 'workspace', project.id, 'src');
 }
 
@@ -47,16 +50,20 @@ async function syncProject(project, branch, onLine) {
   const dir = workspaceDir(project);
   const env = gitEnv(project);
   const g = (args) => git(dir, args, onLine, env);
-  fs.mkdirSync(dir, { recursive: true });
-
-  if (!fs.existsSync(path.join(dir, '.git'))) {
-    await g(['init', '-q']);
-    await g(['remote', 'add', 'origin', url]);
+  if (!url) {
+    if (!isWorkingRepo(dir)) throw new Error(`No git checkout at ${project.source.path} - clone the repo there first`);
   } else {
-    await g(['remote', 'set-url', 'origin', url]);
+    fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(path.join(dir, '.git'))) {
+      await g(['init', '-q']);
+      await g(['remote', 'add', 'origin', url]);
+    } else {
+      await g(['remote', 'set-url', 'origin', url]);
+    }
   }
   // "+" because a shallow repo cannot prove a fast-forward; we always want the remote state.
-  await g(['fetch', '--depth', '1', '--no-tags', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
+  const depth = url ? ['--depth', '1'] : [];
+  await g(['fetch', ...depth, '--no-tags', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
   await g(['checkout', '-q', '-f', '-B', 'ubs-build', `origin/${branch}`]);
   await g(['clean', '-ffdxq', '-e', '/Library/']);
 
@@ -101,7 +108,8 @@ async function listBranches(project, { refresh = false } = {}) {
   const hit = branchCache.get(project.id);
   if (!refresh && hit && Date.now() - hit.fetchedAt < 60000) return hit;
   const lines = [];
-  const code = await run('git', ['ls-remote', '--heads', project.source.url], { env: gitEnv(project), onLine: (l) => lines.push(l) });
+  const { url } = project.source;
+  const code = await run('git', ['ls-remote', '--heads', url || 'origin'], { cwd: url ? undefined : workspaceDir(project), env: gitEnv(project), onLine: (l) => lines.push(l) });
   if (code !== 0) throw new Error(`git ls-remote failed: ${lines.slice(-3).join(' ')}`);
   const branches = lines
     .map((l) => l.match(/^([0-9a-f]{40})\s+refs\/heads\/(.+)$/))

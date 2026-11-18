@@ -37,7 +37,7 @@ app.use('/output', express.static(OUTPUT_DIR));
 app.get('/api/projects', (req, res) => {
   res.json(Object.values(projects).map((p) => ({
     id: p.id, name: p.name, unityVersion: p.unityVersion, versions: readVersions(p),
-    repo: p.source.url, defaultBranch: p.source.defaultBranch,
+    repo: p.source.url || p.source.path, defaultBranch: p.source.defaultBranch,
     environments: Object.entries(p.environments || {}).map(([id, e]) => ({ id, label: e.label || id, url: e.url })),
     defaultEnvironment: p.defaultEnvironment,
     problems: { android: unity.problems(p, 'android'), ios: unity.problems(p, 'ios') },
