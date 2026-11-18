@@ -100,4 +100,12 @@ app.get('/api/events', (req, res) => {
 });
 
 const port = Number(process.env.PORT || 4567);
-app.listen(port, '127.0.0.1', () => console.log(`Unity build dashboard: http://localhost:${port}`));
+app.listen(port, '127.0.0.1', () => console.log(`Unity build dashboard: http://localhost:${port}`))
+  .on('error', (e) => {
+    if (e.code !== 'EADDRINUSE') throw e;
+    console.error(`Port ${port} is already in use - probably another unity-build server is running.`);
+    console.error(`  See what holds it:  lsof -nP -iTCP:${port} -sTCP:LISTEN`);
+    console.error(`  Stop it:            kill $(lsof -ti tcp:${port})`);
+    console.error('  Or use another port: PORT=4568 npm start  (or PORT=... in .env)');
+    process.exit(1);
+  });

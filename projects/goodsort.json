@@ -4,12 +4,9 @@
   "unityVersion": "6000.3.12f1",
   "unityPath": "/Applications/Unity/Hub/Editor/{version}/Unity.app/Contents/MacOS/Unity",
   "source": {
-    "url": "git@github.com:Senspark/GoodSort.git",
+    "url": "https://github.com/Senspark/GoodSort.git",
     "defaultBranch": "Viet/shuffle-booster",
     "submodules": true,
-    "gitConfig": {
-      "url.git@github.com:.insteadOf": "https://github.com/"
-    },
     "extraFiles": {
       "keystore.keystore": "secrets/goodsort.keystore"
     }
