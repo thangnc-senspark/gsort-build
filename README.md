@@ -18,7 +18,7 @@ Mỗi job chạy tuần tự các bước sau:
 Project gốc và Editor không bị đụng tới. Build có Library riêng trong `workspace/` nên có thể build trong lúc Editor đang mở project.
 
 ## Cài đặt
-Cần có: macOS, Node ≥ 18, git có quyền đọc repo (Keychain/SSH), Unity `unityVersion` cùng module Android + iOS cài qua Hub.
+Cần có: macOS, Node ≥ 18, Unity `unityVersion` cùng module Android + iOS cài qua Hub, và **SSH key có quyền đọc repo trên GitHub** (kiểm tra bằng `ssh -T git@github.com`). Key không được đặt passphrase, hoặc đã nạp vào `ssh-agent`: git chạy ở chế độ BatchMode nên không hỏi mật khẩu.
 
 ```sh
 cp .env.example .env        # điền ANDROID_KEYSTORE_PASS, ANDROID_KEYALIAS_PASS
@@ -56,7 +56,8 @@ Cấu hình trong `environments` của `projects/<id>.json`. Mỗi môi trườn
 | Khoá | Ý nghĩa |
 |---|---|
 | `unityVersion`, `unityPath` | Phiên bản Unity và đường dẫn (`{version}` được thay) |
-| `source.url`, `source.defaultBranch`, `source.submodules` | Repo git |
+| `source.url`, `source.defaultBranch`, `source.submodules` | Repo git (GoodSort dùng SSH: `git@github.com:Senspark/GoodSort.git`) |
+| `source.gitConfig` | Cấu hình git áp dụng cho mọi lệnh, kể cả submodule. GoodSort dùng `url.git@github.com:.insteadOf = https://github.com/` để submodule `unity-extension` (khai báo HTTPS trong `.gitmodules`) cũng tải qua SSH |
 | `source.extraFiles` | File gitignore cần cho build: `{ "đích trong repo": "nguồn trong unity-build" }` |
 | `scenes` | Danh sách scene build (để trống thì dùng EditorBuildSettings) |
 | `android.keystore`, `android.outputName` | Keystore (đường dẫn trong repo) và tên file APK/AAB |

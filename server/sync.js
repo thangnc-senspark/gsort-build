@@ -6,15 +6,29 @@ const { spawnSync } = require('child_process');
 const { run } = require('./util');
 
 const ROOT = path.resolve(__dirname, '..');
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+// Environment for every git process, including submodule clones:
+// - never prompt (a missing credential fails the job instead of hanging it),
+// - SSH in batch mode, accepting a host key the first time,
+// - source.gitConfig entries, e.g. rewriting https://github.com/ submodule URLs to SSH.
+function gitEnv(project) {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  if (!env.GIT_SSH_COMMAND) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new';
+  const entries = Object.entries(project.source.gitConfig || {});
+  env.GIT_CONFIG_COUNT = String(entries.length);
+  entries.forEach(([key, value], i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = key;
+    env[`GIT_CONFIG_VALUE_${i}`] = value;
+  });
+  return env;
+}
 
 function workspaceDir(project) {
   return path.join(ROOT, 'workspace', project.id, 'src');
 }
 
-async function git(dir, args, onLine) {
+async function git(dir, args, onLine, env) {
   onLine(`$ git ${args.join(' ')}`);
-  const code = await run('git', args, { cwd: dir, onLine, env: GIT_ENV });
+  const code = await run('git', args, { cwd: dir, onLine, env });
   if (code !== 0) throw new Error(`git ${args[0]} exited with ${code}`);
 }
 
@@ -31,18 +45,20 @@ function isWorkingRepo(dir) {
 async function syncProject(project, branch, onLine) {
   const { url, submodules = true, extraFiles = {} } = project.source;
   const dir = workspaceDir(project);
+  const env = gitEnv(project);
+  const g = (args) => git(dir, args, onLine, env);
   fs.mkdirSync(dir, { recursive: true });
 
   if (!fs.existsSync(path.join(dir, '.git'))) {
-    await git(dir, ['init', '-q'], onLine);
-    await git(dir, ['remote', 'add', 'origin', url], onLine);
+    await g(['init', '-q']);
+    await g(['remote', 'add', 'origin', url]);
   } else {
-    await git(dir, ['remote', 'set-url', 'origin', url], onLine);
+    await g(['remote', 'set-url', 'origin', url]);
   }
   // "+" because a shallow repo cannot prove a fast-forward; we always want the remote state.
-  await git(dir, ['fetch', '--depth', '1', '--no-tags', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`], onLine);
-  await git(dir, ['checkout', '-q', '-f', '-B', 'ubs-build', `origin/${branch}`], onLine);
-  await git(dir, ['clean', '-ffdxq', '-e', '/Library/'], onLine);
+  await g(['fetch', '--depth', '1', '--no-tags', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
+  await g(['checkout', '-q', '-f', '-B', 'ubs-build', `origin/${branch}`]);
+  await g(['clean', '-ffdxq', '-e', '/Library/']);
 
   if (submodules) {
     // A submodule folder without a valid .git would make `submodule update` fail.
@@ -54,9 +70,9 @@ async function syncProject(project, branch, onLine) {
         fs.rmSync(subDir, { recursive: true, force: true });
       }
     }
-    await git(dir, ['submodule', 'sync', '-q', '--recursive'], onLine);
-    await git(dir, ['submodule', 'update', '--init', '--recursive', '--depth', '1', '-f'], onLine);
-    await git(dir, ['submodule', 'foreach', '-q', '--recursive', 'git clean -ffdxq'], onLine);
+    await g(['submodule', 'sync', '-q', '--recursive']);
+    await g(['submodule', 'update', '--init', '--recursive', '--depth', '1', '-f']);
+    await g(['submodule', 'foreach', '-q', '--recursive', 'git clean -ffdxq']);
   }
 
   const out = spawnSync('git', ['log', '-1', '--format=%H%x1f%h%x1f%s%x1f%an%x1f%cI'], { cwd: dir, encoding: 'utf8' }).stdout.trim();
@@ -85,7 +101,7 @@ async function listBranches(project, { refresh = false } = {}) {
   const hit = branchCache.get(project.id);
   if (!refresh && hit && Date.now() - hit.fetchedAt < 60000) return hit;
   const lines = [];
-  const code = await run('git', ['ls-remote', '--heads', project.source.url], { env: GIT_ENV, onLine: (l) => lines.push(l) });
+  const code = await run('git', ['ls-remote', '--heads', project.source.url], { env: gitEnv(project), onLine: (l) => lines.push(l) });
   if (code !== 0) throw new Error(`git ls-remote failed: ${lines.slice(-3).join(' ')}`);
   const branches = lines
     .map((l) => l.match(/^([0-9a-f]{40})\s+refs\/heads\/(.+)$/))
